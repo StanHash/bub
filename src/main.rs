@@ -113,6 +113,8 @@ fn main() -> Result<()>
 
     env_logger::builder().format_timestamp(None).init();
 
+    // read options, init inputs
+
     let opt = Opt::from_args();
 
     let rom_data =
@@ -135,7 +137,7 @@ fn main() -> Result<()>
     let tags = match opt.tags_filename
     {
         Some(filename) => tags::parse_tags(&mut BufReader::new(File::open(filename)?))?,
-        None => vec![]
+        None => vec![(XAddr::new(0, 0x0100), tags::Tag::Code)]
     };
 
     let entry_points =
@@ -155,9 +157,13 @@ fn main() -> Result<()>
         entry_points.into_sorted_vec()
     };
 
+    // analysis
+
     let anal_info = anal::AnalInfo::new(rom_info, &rom_data, &tags);
 
     let code_blocks = anal::anal(&anal_info, &entry_points);
+
+    // do automatic names
 
     let mut name_map = HashMap::new();
 
@@ -170,6 +176,8 @@ fn main() -> Result<()>
     }
 
     update_name_map_with_code_refs(&anal_info, &code_blocks, &mut name_map);
+
+    // print listing
 
     let mut last_xa = XAddr::new(0xFFFF, 0xFFFF);
     let mut last_name = String::from("");
@@ -187,6 +195,32 @@ fn main() -> Result<()>
             if update {
                 last_name = name.clone(); }
             name
+        }
+    };
+
+    let print_object = |xa: XAddr, fmt: &str|
+    {
+        let mut comments = tags::get_tags_at(&tags, &xa).iter().filter_map(|tag|
+        {
+            match &tag.1
+            {
+                tags::Tag::Comment(comment) => Some(comment),
+                _ => None,
+            }
+        });
+
+        if let Some(head_comment) = comments.next()
+        {
+            println!("\t/* {} */ {} ; {}", xa, fmt, head_comment);
+
+            for tail_comment in comments
+            {
+                println!("\t              {} ; {}", " ".repeat(fmt.len()), tail_comment);
+            }
+        }
+        else
+        {
+            println!("\t/* {} */ {}", xa, fmt);
         }
     };
 
@@ -228,7 +262,7 @@ fn main() -> Result<()>
 
             let fmt = fmt.replace("%", &ops);
 
-            println!("\t/* {} */ {}", xa, fmt);
+            print_object(xa, &fmt);
         }
 
         println!("");

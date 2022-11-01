@@ -19,6 +19,7 @@ pub enum Tag
     RamBank(u16),
     SrmBank(u16),
     OperandAddr,
+    Comment(String),
 }
 
 pub fn get_tags_at<'a>(dict: &'a [(XAddr, Tag)], xa: &XAddr) -> &'a [(XAddr, Tag)]
@@ -104,6 +105,8 @@ pub fn parse_tags<R>(read: &mut R) -> Result<Vec<(XAddr, Tag)>, ParseTagsError>
 
             ".addr" => Tag::OperandAddr,
 
+            // NOTE: TODO: FIXME: this doesn't account for varied whitespaces in comment string
+            ".comment" => Tag::Comment(split.collect::<Vec<_>>().join(" ")),
             str_tag => Tag::Name(str_tag.to_string()),
         };
 
