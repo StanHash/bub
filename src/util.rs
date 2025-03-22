@@ -5,10 +5,15 @@
  */
 
 pub fn sorted_merge<T>(a: &[T], b: &[T]) -> Vec<T>
-    where T: Ord + Copy
+where
+    T: Ord + Copy,
 {
-    if a.len() == 0 { return b.into() }
-    if b.len() == 0 { return a.into() }
+    if a.len() == 0 {
+        return b.into();
+    }
+    if b.len() == 0 {
+        return a.into();
+    }
 
     let (mut ia, mut ib) = (0, 0);
     let mut sorted = Vec::with_capacity(a.len() + b.len());
@@ -16,27 +21,21 @@ pub fn sorted_merge<T>(a: &[T], b: &[T]) -> Vec<T>
     let remaining;
     let remaining_begin;
 
-    loop
-    {
-        if a[ia] < b[ib]
-        {
+    loop {
+        if a[ia] < b[ib] {
             sorted.push(a[ia]);
             ia += 1;
 
-            if ia == a.len()
-            {
+            if ia == a.len() {
                 remaining = b;
                 remaining_begin = ib;
                 break;
             }
-        }
-        else
-        {
+        } else {
             sorted.push(b[ib]);
             ib += 1;
 
-            if ib == b.len()
-            {
+            if ib == b.len() {
                 remaining = a;
                 remaining_begin = ia;
                 break;
@@ -44,8 +43,9 @@ pub fn sorted_merge<T>(a: &[T], b: &[T]) -> Vec<T>
         }
     }
 
-    for i in remaining_begin .. remaining.len() {
-        sorted.push(remaining[i]); }
+    for i in remaining_begin..remaining.len() {
+        sorted.push(remaining[i]);
+    }
 
     sorted
 }

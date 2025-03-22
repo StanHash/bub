@@ -7,8 +7,7 @@
 use std::ops::AddAssign;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
-pub enum OperandKind
-{
+pub enum OperandKind {
     None,
     Undefined,
     LongOpcode,
@@ -18,16 +17,15 @@ pub enum OperandKind
     DataHram,
 }
 
-pub const OPCODE_FLAG_JUMP: u8        = 0b00000001;
-pub const OPCODE_FLAG_CALL: u8        = 0b00000010;
+pub const OPCODE_FLAG_JUMP: u8 = 0b00000001;
+pub const OPCODE_FLAG_CALL: u8 = 0b00000010;
 pub const OPCODE_FLAG_CONDITIONAL: u8 = 0b00000100;
-pub const OPCODE_FLAG_WRITE_MEM: u8   = 0b00001000;
-pub const OPCODE_FLAG_READ_MEM: u8    = 0b00010000;
-pub const OPCODE_FLAG_INVALID: u8     = 0b10000000;
+pub const OPCODE_FLAG_WRITE_MEM: u8 = 0b00001000;
+pub const OPCODE_FLAG_READ_MEM: u8 = 0b00010000;
+pub const OPCODE_FLAG_INVALID: u8 = 0b10000000;
 
 #[derive(Clone, Copy, Debug)]
-pub struct OpcodeInfo
-{
+pub struct OpcodeInfo {
     pub fmt: &'static str,
     pub operand_len: u8,
     pub operand_kind: OperandKind,
@@ -45,46 +43,36 @@ const OPCODE_RST_30: u8 = 0xF7;
 const OPCODE_RST_38: u8 = 0xFF;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Instruction
-{
+pub struct Instruction {
     pub opcode: u8,
     pub operand: u16,
 }
 
-impl Instruction
-{
-    pub const fn new() -> Self
-    {
-        Instruction
-        {
+impl Instruction {
+    pub const fn new() -> Self {
+        Instruction {
             opcode: 0,
-            operand: 0
+            operand: 0,
         }
     }
 
-    pub fn info(&self) -> &'static OpcodeInfo
-    {
-        match self.opcode
-        {
+    pub fn info(&self) -> &'static OpcodeInfo {
+        match self.opcode {
             OPCODE_BITOPS => &BITOPS_INFO[self.operand as usize],
             opcode => &OPCODE_INFO[opcode as usize],
         }
     }
 
-    pub fn is_valid(&self) -> bool
-    {
+    pub fn is_valid(&self) -> bool {
         (self.info().flags & OPCODE_FLAG_INVALID) == 0
     }
 
-    pub fn encoded_len(&self) -> usize
-    {
+    pub fn encoded_len(&self) -> usize {
         self.info().operand_len as usize + 1
     }
 
-    pub fn get_jump_target(&self) -> Option<u16>
-    {
-        match self.opcode
-        {
+    pub fn get_jump_target(&self) -> Option<u16> {
+        match self.opcode {
             OPCODE_RST_00 => Some(0x0000),
             OPCODE_RST_08 => Some(0x0008),
             OPCODE_RST_10 => Some(0x0010),
@@ -93,38 +81,41 @@ impl Instruction
             OPCODE_RST_28 => Some(0x0028),
             OPCODE_RST_30 => Some(0x0030),
             OPCODE_RST_38 => Some(0x0038),
-            _ =>
-            {
+            _ => {
                 if (self.info().flags & OPCODE_FLAG_JUMP) != 0
-                && self.info().operand_kind != OperandKind::None {
-                    Some(self.operand) }
-                else {
-                    None }
+                    && self.info().operand_kind != OperandKind::None
+                {
+                    Some(self.operand)
+                } else {
+                    None
+                }
             }
         }
     }
 
-    pub fn is_addr_operand(&self) -> bool
-    {
-        return self.info().flags & (OPCODE_FLAG_READ_MEM | OPCODE_FLAG_WRITE_MEM | OPCODE_FLAG_JUMP) != 0
+    pub fn is_addr_operand(&self) -> bool {
+        return self.info().flags
+            & (OPCODE_FLAG_READ_MEM | OPCODE_FLAG_WRITE_MEM | OPCODE_FLAG_JUMP)
+            != 0
             && self.info().operand_kind != OperandKind::None
-            && (self.info().operand_len == 2 || self.info().operand_kind == OperandKind::DataHram || self.info().operand_kind == OperandKind::CodeRelative);
+            && (self.info().operand_len == 2
+                || self.info().operand_kind == OperandKind::DataHram
+                || self.info().operand_kind == OperandKind::CodeRelative);
     }
 }
 
 #[derive(Clone, Copy, Debug)]
-pub enum DecodeError
-{
+pub enum DecodeError {
     SliceTooSmall,
     InvalidOpcode,
 }
 
 pub type DecodeResult = Result<Instruction, DecodeError>;
 
-pub fn decode(addr: u16, slice: &[u8]) -> DecodeResult
-{
+pub fn decode(addr: u16, slice: &[u8]) -> DecodeResult {
     if slice.len() == 0 {
-        return Err(DecodeError::SliceTooSmall); }
+        return Err(DecodeError::SliceTooSmall);
+    }
 
     let mut result = Instruction::new();
 
@@ -133,27 +124,29 @@ pub fn decode(addr: u16, slice: &[u8]) -> DecodeResult
     result.opcode = slice[0];
 
     if !result.is_valid() {
-        return Err(DecodeError::InvalidOpcode); }
+        return Err(DecodeError::InvalidOpcode);
+    }
 
     // read operand
 
     let len = result.encoded_len();
 
     if slice.len() < len {
-        return Err(DecodeError::SliceTooSmall); }
+        return Err(DecodeError::SliceTooSmall);
+    }
 
-    for i in 0 .. len-1 {
-        result.operand += (slice[1+i] as u16) << i*8; }
+    for i in 0..len - 1 {
+        result.operand += (slice[1 + i] as u16) << i * 8;
+    }
 
     // fix operand if necessary
 
-    match result.info().operand_kind
-    {
-        OperandKind::CodeRelative =>
-            result.operand = ((addr as i32) + 2 + (result.operand as i8) as i32) as u16,
+    match result.info().operand_kind {
+        OperandKind::CodeRelative => {
+            result.operand = ((addr as i32) + 2 + (result.operand as i8) as i32) as u16
+        }
 
-        OperandKind::DataHram =>
-            result.operand = 0xFF00 + result.operand,
+        OperandKind::DataHram => result.operand = 0xFF00 + result.operand,
 
         _ => {}
     }
@@ -162,28 +155,29 @@ pub fn decode(addr: u16, slice: &[u8]) -> DecodeResult
 }
 
 pub struct DecodeSliceIter<'a, T>
-    where T: Copy + AddAssign<u16> + Into<u16>
+where
+    T: Copy + AddAssign<u16> + Into<u16>,
 {
     addr: T,
     slice: &'a [u8],
 }
 
 impl<'a, T> Iterator for DecodeSliceIter<'a, T>
-    where T: Copy + AddAssign<u16> + Into<u16>
+where
+    T: Copy + AddAssign<u16> + Into<u16>,
 {
     type Item = (T, DecodeResult);
 
-    fn next(&mut self) -> Option<(T, DecodeResult)>
-    {
+    fn next(&mut self) -> Option<(T, DecodeResult)> {
         if self.slice.len() == 0 {
-            return None; }
+            return None;
+        }
 
         let (addr, ins) = (self.addr, decode(self.addr.into(), self.slice));
 
-        if let Ok(ins) = ins
-        {
+        if let Ok(ins) = ins {
             self.addr += ins.encoded_len() as u16;
-            self.slice = &self.slice[ins.encoded_len() ..];
+            self.slice = &self.slice[ins.encoded_len()..];
         }
 
         Some((addr, ins))
@@ -191,19 +185,22 @@ impl<'a, T> Iterator for DecodeSliceIter<'a, T>
 }
 
 pub fn decode_slice<'a, T>(addr: T, slice: &'a [u8]) -> DecodeSliceIter<'a, T>
-    where T: Copy + AddAssign<u16> + Into<u16>
+where
+    T: Copy + AddAssign<u16> + Into<u16>,
 {
-    DecodeSliceIter
-    {
+    DecodeSliceIter {
         addr: addr,
         slice: slice,
     }
 }
 
-const fn opi(fmt: &'static str, operand_len: u8, operand_kind: OperandKind, flags: u8) -> OpcodeInfo
-{
-    OpcodeInfo
-    {
+const fn opi(
+    fmt: &'static str,
+    operand_len: u8,
+    operand_kind: OperandKind,
+    flags: u8,
+) -> OpcodeInfo {
+    OpcodeInfo {
         fmt: fmt,
         operand_len: operand_len,
         operand_kind: operand_kind,
@@ -211,8 +208,8 @@ const fn opi(fmt: &'static str, operand_len: u8, operand_kind: OperandKind, flag
     }
 }
 
-const OPCODE_INFO: [OpcodeInfo; 0x100] =
-[
+#[rustfmt::skip]
+const OPCODE_INFO: [OpcodeInfo; 0x100] = [
     /* 00 */ opi("nop", 0, OperandKind::None, 0),
     /* 01 */ opi("ld bc, %", 2, OperandKind::Undefined, 0),
     /* 02 */ opi("ld [bc], a", 0, OperandKind::None, OPCODE_FLAG_WRITE_MEM),
@@ -471,8 +468,8 @@ const OPCODE_INFO: [OpcodeInfo; 0x100] =
     /* FF */ opi("rst $38", 0, OperandKind::None, OPCODE_FLAG_JUMP | OPCODE_FLAG_CALL),
 ];
 
-const BITOPS_INFO: [OpcodeInfo; 0x100] =
-[
+#[rustfmt::skip]
+const BITOPS_INFO: [OpcodeInfo; 0x100] = [
     /* 00 */ opi("rlc b", 1, OperandKind::LongOpcode, 0),
     /* 01 */ opi("rlc c", 1, OperandKind::LongOpcode, 0),
     /* 02 */ opi("rlc d", 1, OperandKind::LongOpcode, 0),

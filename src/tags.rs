@@ -10,8 +10,7 @@ use thiserror::Error;
 use super::xaddr::prelude::*;
 
 #[derive(Debug)]
-pub enum Tag
-{
+pub enum Tag {
     Name(String),
     Code,
     NoReturn,
@@ -22,15 +21,13 @@ pub enum Tag
     Comment(String),
 }
 
-pub fn get_tags_at<'a>(dict: &'a [(XAddr, Tag)], xa: &XAddr) -> &'a [(XAddr, Tag)]
-{
+pub fn get_tags_at<'a>(dict: &'a [(XAddr, Tag)], xa: &XAddr) -> &'a [(XAddr, Tag)] {
     use superslice::*;
     &dict[dict.equal_range_by_key(xa, |xt| xt.0)]
 }
 
 #[derive(Error, Debug)]
-pub enum ParseTagsError
-{
+pub enum ParseTagsError {
     #[error("IO error")]
     Io(#[from] std::io::Error),
 
@@ -48,33 +45,35 @@ pub enum ParseTagsError
 }
 
 pub fn parse_tags<R>(read: &mut R) -> Result<Vec<(XAddr, Tag)>, ParseTagsError>
-    where R: BufRead
+where
+    R: BufRead,
 {
     let mut result = vec![];
 
-    for line in read.lines()
-    {
+    for line in read.lines() {
         let line = line?;
         let line = line.trim();
 
         if line.is_empty() || line.starts_with(';') {
-            continue; }
+            continue;
+        }
 
         let mut split = line.split(char::is_whitespace);
 
         // parse address
 
-        let xa =
-        {
+        let xa = {
             let opt_str_addr = split.next();
             let str_addr = opt_str_addr.unwrap(); // since trimmed line is not empty, there must be at least one part in the line
 
             let str_addr_components: Vec<&str> = str_addr.split(':').collect();
 
-            match str_addr_components.len()
-            {
+            match str_addr_components.len() {
                 1 => XAddr::new(0, u16::from_str_radix(&str_addr_components[0], 16)?),
-                2 => XAddr::new(u16::from_str_radix(&str_addr_components[0], 16)?, u16::from_str_radix(&str_addr_components[1], 16)?),
+                2 => XAddr::new(
+                    u16::from_str_radix(&str_addr_components[0], 16)?,
+                    u16::from_str_radix(&str_addr_components[1], 16)?,
+                ),
                 _ => return Err(ParseTagsError::InvalidAddressField),
             }
         };
@@ -84,24 +83,27 @@ pub fn parse_tags<R>(read: &mut R) -> Result<Vec<(XAddr, Tag)>, ParseTagsError>
         let opt_str_tag = split.next();
 
         if let None = opt_str_tag {
-            return Err(ParseTagsError::MissingTag); }
+            return Err(ParseTagsError::MissingTag);
+        }
 
-        let tag = match opt_str_tag.unwrap()
-        {
+        let tag = match opt_str_tag.unwrap() {
             ".code" => Tag::Code,
             ".noreturn" => Tag::NoReturn,
 
             ".bank" | ".rombank" => Tag::RomBank(match split.next() {
                 None => return Err(ParseTagsError::MissingTagArgument),
-                Some(str_bank) => str_bank.parse()? }),
+                Some(str_bank) => str_bank.parse()?,
+            }),
 
             ".rambank" => Tag::RamBank(match split.next() {
                 None => return Err(ParseTagsError::MissingTagArgument),
-                Some(str_bank) => str_bank.parse()? }),
+                Some(str_bank) => str_bank.parse()?,
+            }),
 
             ".srambank" => Tag::SrmBank(match split.next() {
                 None => return Err(ParseTagsError::MissingTagArgument),
-                Some(str_bank) => str_bank.parse()? }),
+                Some(str_bank) => str_bank.parse()?,
+            }),
 
             ".addr" => Tag::OperandAddr,
 
