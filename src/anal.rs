@@ -4,6 +4,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
+use log::warn;
+
 use super::gbasm;
 use super::tags;
 use super::util;
@@ -320,7 +322,13 @@ fn scan_xrefs(info: &AnalInfo, code_blocks: &[(XAddr, usize)]) -> Vec<XAddr> {
     for &(xa, len) in code_blocks {
         let mut emu = AnalEmu::with_bound(info, xa, len);
 
-        while let Some((_, Ok(ins))) = emu.next() {
+        'lop_ins: while let Some((ins_xa, Ok(ins))) = emu.next() {
+            for (_, tag) in tags::get_tags_at(info.tags, &ins_xa) {
+                if let tags::Tag::DontFollowCall = tag {
+                    continue 'lop_ins;
+                }
+            }
+
             if let Some(addr) = ins.get_jump_target() {
                 match emu.expand_addr(addr) {
                     Some(xa) => result.push(xa),
@@ -334,6 +342,24 @@ fn scan_xrefs(info: &AnalInfo, code_blocks: &[(XAddr, usize)]) -> Vec<XAddr> {
     result.dedup();
 
     result
+}
+
+fn warn_about_differences(prev_points: &[XAddr], new_points: &[XAddr]) {
+    let mut i = 0;
+    let mut j = 0;
+
+    while i < prev_points.len() && j < new_points.len() {
+        if j == new_points.len() || prev_points[i] < new_points[j] {
+            warn!("point {0} was removed", prev_points[i]);
+            i += 1;
+        } else if i == prev_points.len() || new_points[j] < prev_points[i] {
+            warn!("point {0} was added", new_points[j]);
+            j += 1;
+        } else {
+            i += 1;
+            j += 1;
+        }
+    }
 }
 
 pub fn anal(info: &AnalInfo, entry_points: &[XAddr]) -> Vec<(XAddr, usize)> {
@@ -370,6 +396,12 @@ pub fn anal(info: &AnalInfo, entry_points: &[XAddr]) -> Vec<(XAddr, usize)> {
 
         if points == prev_points {
             info!("no new xrefs found, ending analysis");
+            return code_blocks;
+        }
+
+        if points.len() < prev_points.len() {
+            warn!("found less points than previously");
+            warn_about_differences(&prev_points, &points);
             return code_blocks;
         }
     }

@@ -136,14 +136,48 @@ fn main() -> Result<()> {
         None => vec![(XAddr::new(0, 0x0100), tags::Tag::Code)],
     };
 
+    let anal_info = anal::AnalInfo::new(rom_info, &rom_data, &tags);
+
     let entry_points = {
         use std::collections::BinaryHeap;
 
         let mut entry_points = BinaryHeap::new();
 
         for (xa, tag) in &tags {
-            if let tags::Tag::Code = tag {
-                entry_points.push(*xa);
+            match tag {
+                tags::Tag::Code => {
+                    entry_points.push(*xa);
+                }
+
+                tags::Tag::JumpTable(num_entries) => {
+                    let num_entries = *num_entries;
+
+                    let addr_bytes = match anal_info.rom_slice(*xa, num_entries * 2) {
+                        Ok(slice) => slice,
+                        Err(e) => panic!(
+                            "{}[{:04X}] can't read jump table: {:?}",
+                            xa,
+                            num_entries * 2,
+                            e
+                        ),
+                    };
+
+                    for i in 0..num_entries {
+                        let lo: u16 = addr_bytes[i * 2 + 0] as u16;
+                        let hi: u16 = addr_bytes[i * 2 + 1] as u16;
+                        let addr = lo | (hi << 8);
+
+                        /* HACK-ish */
+                        let entry_xa = if addr >= 0x4000 {
+                            XAddr::new(xa.bank, addr)
+                        } else {
+                            XAddr::new(0, addr)
+                        };
+
+                        entry_points.push(entry_xa);
+                    }
+                }
+                _ => (),
             }
         }
 
@@ -151,8 +185,6 @@ fn main() -> Result<()> {
     };
 
     // analysis
-
-    let anal_info = anal::AnalInfo::new(rom_info, &rom_data, &tags);
 
     let code_blocks = anal::anal(&anal_info, &entry_points);
 
@@ -211,7 +243,29 @@ fn main() -> Result<()> {
 
     for (xa, len) in code_blocks {
         if last_xa != xa {
-            println!("\t; end: {}", last_xa);
+            if last_xa.bank != 0xFFFF {
+                println!("\t; end: {}", last_xa);
+
+                // print data between code chunks
+
+                if last_xa.bank == xa.bank {
+                    let data = anal_info
+                        .rom_slice(last_xa, (xa.addr - last_xa.addr) as usize)
+                        .unwrap();
+
+                    print_data(data);
+                } else if last_xa.bank != 0xFFFF {
+                    let len = if last_xa.bank == 0 {
+                        0x4000 - last_xa.addr
+                    } else {
+                        0x8000 - last_xa.addr
+                    };
+
+                    let data = anal_info.rom_slice(last_xa, len as usize).unwrap();
+                    print_data(data);
+                }
+            }
+
             println!("\tsection \"rom_{:02X}_{:04X}\"", xa.bank, xa.addr);
         }
 
@@ -257,4 +311,17 @@ fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn print_data(data: &[u8]) {
+    for (i, b) in data.iter().enumerate() {
+        if i % 8 == 0 {
+            print!("\n\t.db ${b:02X}");
+        } else {
+            print!(", ${b:02X}");
+        }
+    }
+
+    println!();
+    println!();
 }

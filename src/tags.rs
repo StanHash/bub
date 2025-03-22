@@ -19,6 +19,8 @@ pub enum Tag {
     SrmBank(u16),
     OperandAddr,
     Comment(String),
+    JumpTable(usize),
+    DontFollowCall,
 }
 
 pub fn get_tags_at<'a>(dict: &'a [(XAddr, Tag)], xa: &XAddr) -> &'a [(XAddr, Tag)] {
@@ -89,6 +91,7 @@ where
         let tag = match opt_str_tag.unwrap() {
             ".code" => Tag::Code,
             ".noreturn" => Tag::NoReturn,
+            ".dontfollow" => Tag::DontFollowCall,
 
             ".bank" | ".rombank" => Tag::RomBank(match split.next() {
                 None => return Err(ParseTagsError::MissingTagArgument),
@@ -101,6 +104,11 @@ where
             }),
 
             ".srambank" => Tag::SrmBank(match split.next() {
+                None => return Err(ParseTagsError::MissingTagArgument),
+                Some(str_bank) => str_bank.parse()?,
+            }),
+
+            ".jtda" => Tag::JumpTable(match split.next() {
                 None => return Err(ParseTagsError::MissingTagArgument),
                 Some(str_bank) => str_bank.parse()?,
             }),
